@@ -1,7 +1,7 @@
 {
   "name": "markflow",
   "productName": "MarkFlow",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "MarkFlow - Windows Markdown 阅读与编辑器",
   "main": "main/main.js",
   "license": "MIT",
