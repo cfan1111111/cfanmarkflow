@@ -105,6 +105,23 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
     if (activePath) setActive(activePath);
   }
 
+  /* 设置当前活动文件并高亮；同时自动展开其所在目录（revealPath），保证文件列表可见。
+   * 注意：必须定义为局部函数，loadInto 末尾也要调用它（给新加载的子节点补高亮），
+   * 不能只作为返回对象的方法——否则 loadInto 内裸调用会抛 “setActive is not defined”。 */
+  function setActive(p) {
+    activePath = p;
+    container.querySelectorAll('.tree-item.file.active').forEach((el) => el.classList.remove('active'));
+    if (p) {
+      // 用 dataset 直接比对，避免路径含反斜杠等字符时选择器转义出错
+      const el = Array.from(container.querySelectorAll('.tree-item.file')).find((x) => x.dataset.path === p);
+      if (el) {
+        el.classList.add('active');
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+    if (p) revealPath(p); // 自动展开到该文件所在目录，保证文件列表可见
+  }
+
   async function refresh() {
     if (!dir) { container.innerHTML = '<div class="tree-empty">未选择目录</div>'; return; }
     const gen = ++refreshGen;
@@ -173,18 +190,6 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
       cache.clear();
       return refresh();
     },
-    setActive(p) {
-      activePath = p;
-      container.querySelectorAll('.tree-item.file.active').forEach((el) => el.classList.remove('active'));
-      if (p) {
-        // 用 dataset 直接比对，避免路径含反斜杠等字符时选择器转义出错
-        const el = Array.from(container.querySelectorAll('.tree-item.file')).find((x) => x.dataset.path === p);
-        if (el) {
-          el.classList.add('active');
-          el.scrollIntoView({ block: 'nearest' });
-        }
-      }
-      if (p) revealPath(p); // 自动展开到该文件所在目录，保证文件列表可见
-    },
+    setActive,
   };
 }
