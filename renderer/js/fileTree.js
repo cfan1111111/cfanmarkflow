@@ -2,19 +2,36 @@
  * 目录只在展开时按需拉取一层，避免大目录全量遍历与超量 DOM；
  * 展开状态与节点缓存在会话内保留，刷新文件树不重置用户操作。
  *
- * 本次修复：
+ * 修复要点：
  *  1) 同一层有多个已展开目录时，展开加载不再互相取消
  *     —— 改用「按刷新的 generation 令牌」取代原先全局自增的 renderToken，
  *        同一次刷新内的多个 loadInto 共享同一 gen，不会被彼此取消。
  *  2) 打开 / 选中文件时自动展开其所在目录（revealPath），保证文件列表始终可见，
- *     连续挑选多个文件无需反复展开，解决「点文件后目录树收起、只剩目录列表」的痛点。 */
+ *     连续挑选多个文件无需反复展开，解决「点文件后目录树收起、只剩目录列表」的痛点。
+ *  3) 路径统一归一化（分隔符 / 大小写 / 尾部斜杠），避免 Windows 下因「打开文件」对话框、
+ *     最近文件等来源的路径分隔符或大小写不一致，导致 reveal 判定失败、文件在树中“消失/像被收起”。 */
 import { basename, dirname } from './utils.js';
+
+/** 路径归一化：统一为反斜杠、去尾部分隔符、转小写（Windows 路径大小写不敏感）。 */
+function normPath(p) {
+  return String(p || '')
+    .replace(/[\\/]+$/, '')
+    .replace(/[\\/]/g, '\\')
+    .toLowerCase();
+}
+
+/** 判断 child 是否位于 parent 之内（含相等）。归一化后比较，跨分隔符/大小写稳健。 */
+export function isWithinDir(parent, child) {
+  const a = normPath(parent);
+  const b = normPath(child);
+  return b === a || b.startsWith(a + '\\');
+}
 
 export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
   let dir = '';
   let sortBy = 'name';
   let activePath = '';
-  const expanded = new Set();      // 已展开的目录路径（刷新后保持）
+  const expanded = new Set();      // 已展开目录（归一化 key）
   const cache = new Map();         // dir -> nodes（避免重复 IPC）
   let refreshGen = 0;              // 每次刷新自增；loadInto 仅当被更新的刷新取代时才取消
   let revealInFlight = false;      // 防止 reveal 重入
@@ -32,44 +49,45 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
   }
 
   function findDirRow(p) {
-    return Array.from(container.querySelectorAll('.tree-item.dir')).find((x) => x.dataset.path === p) || null;
+    const k = normPath(p);
+    return Array.from(container.querySelectorAll('.tree-item.dir')).find((x) => normPath(x.dataset.path) === k) || null;
   }
 
   function renderNodes(nodes, depth, gen) {
     const frag = document.createDocumentFragment();
     for (const n of nodes) {
+      const pkey = normPath(n.path);
       const row = document.createElement('div');
       row.className = 'tree-item' + (n.isDir ? ' dir' : ' file');
       row.style.paddingLeft = `${8 + depth * 14}px`;
-      row.dataset.path = n.path;
+      row.dataset.path = pkey;
       row.dataset.depth = depth;
-      if (!n.isDir && n.path === activePath) row.classList.add('active');
+      if (!n.isDir && pkey === normPath(activePath)) row.classList.add('active');
 
       if (n.isDir) {
         row.innerHTML = `<span class="twisty">▸</span><span class="ico">📁</span><span class="name">${escapeHtml(n.name)}</span>`;
         const childWrap = document.createElement('div');
         childWrap.className = 'tree-children';
         childWrap.style.display = 'none';
-        childWrap.innerHTML = '<div class="tree-empty">加载中…</div>';
-        const isOpen = expanded.has(n.path);
+        const isOpen = expanded.has(pkey);
         const twisty = row.querySelector('.twisty');
         twisty.textContent = isOpen ? '▾' : '▸';
         twisty.classList.toggle('expanded', isOpen);
         frag.appendChild(row);
         frag.appendChild(childWrap);
-        if (isOpen) loadInto(childWrap, n.path, depth + 1, gen);
+        if (isOpen) loadInto(childWrap, pkey, depth + 1, gen);
         row.addEventListener('click', () => {
-          if (expanded.has(n.path)) {
-            expanded.delete(n.path);
+          if (expanded.has(pkey)) {
+            expanded.delete(pkey);
             twisty.textContent = '▸';
             twisty.classList.remove('expanded');
             childWrap.style.display = 'none';
           } else {
-            expanded.add(n.path);
+            expanded.add(pkey);
             twisty.textContent = '▾';
             twisty.classList.add('expanded');
             childWrap.style.display = '';
-            loadInto(childWrap, n.path, depth + 1, refreshGen);
+            loadInto(childWrap, pkey, depth + 1, refreshGen);
           }
         });
       } else {
@@ -106,14 +124,15 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
   }
 
   /* 设置当前活动文件并高亮；同时自动展开其所在目录（revealPath），保证文件列表可见。
-   * 注意：必须定义为局部函数，loadInto 末尾也要调用它（给新加载的子节点补高亮），
+   * 必须定义为局部函数：loadInto 末尾也要调用它（给新加载的子节点补高亮），
    * 不能只作为返回对象的方法——否则 loadInto 内裸调用会抛 “setActive is not defined”。 */
   function setActive(p) {
     activePath = p;
+    const ak = normPath(p);
     container.querySelectorAll('.tree-item.file.active').forEach((el) => el.classList.remove('active'));
     if (p) {
-      // 用 dataset 直接比对，避免路径含反斜杠等字符时选择器转义出错
-      const el = Array.from(container.querySelectorAll('.tree-item.file')).find((x) => x.dataset.path === p);
+      // 用归一化 dataset 直接比对，避免路径含反斜杠 / 大小写差异导致选择器匹配失败
+      const el = Array.from(container.querySelectorAll('.tree-item.file')).find((x) => normPath(x.dataset.path) === ak);
       if (el) {
         el.classList.add('active');
         el.scrollIntoView({ block: 'nearest' });
@@ -139,23 +158,28 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
     }
   }
 
-  /* 自动展开到 filePath 所在的目录，使其文件列表可见（不折叠任何其它已展开目录） */
+  /* 自动展开到 filePath 所在的目录，使其文件列表可见（不折叠任何其它已展开目录）。
+   * 仅处理位于「当前工作目录之内」的文件；工作目录之外的文件由 app 层切换工作目录后再 reveal。 */
   function revealPath(filePath) {
     if (!filePath || !dir || revealInFlight) return;
     revealInFlight = true;
     _revealPath(filePath).finally(() => { revealInFlight = false; });
   }
   async function _revealPath(filePath) {
+    if (!filePath || !dir) return;
     const targetDir = dirname(filePath);
-    if (targetDir === dir) return; // 文件就在工作目录根层，无需展开
-    if (!(targetDir.startsWith(dir + '\\') || targetDir.startsWith(dir + '/'))) return;
+    const nDir = normPath(dir);
+    const nTarget = normPath(targetDir);
+    // 仅当文件确实位于当前工作目录之内（含根层）才在此处理；之外的交由 app 切换目录
+    if (!(nTarget === nDir || nTarget.startsWith(nDir + '\\'))) return;
+    if (nTarget === nDir) return; // 文件就在工作目录根层，无需展开
     // 收集从目标目录回溯到工作目录的各层祖先（深→浅）
     const ancestors = [];
-    let cur = targetDir;
-    while (cur.length > dir.length) {
+    let cur = nTarget;
+    while (cur.length > nDir.length) {
       ancestors.push(cur);
-      const parent = dirname(cur);
-      if (parent === dir || parent.length <= dir.length) break;
+      const parent = normPath(dirname(cur));
+      if (parent === nDir || parent.length <= nDir.length) break;
       cur = parent;
     }
     ancestors.reverse(); // 改为浅→深，逐级展开
@@ -178,7 +202,7 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
 
   return {
     setDir(d, sort) {
-      dir = d;
+      dir = normPath(d);
       if (sort) sortBy = sort;
       cache.clear();
       expanded.clear();

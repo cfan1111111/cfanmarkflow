@@ -7,7 +7,7 @@ import { $, $$, debounce, escapeHtml, basename, dirname, countWords, confirmDial
 import { t, setLang, getLang, applyI18n } from './i18n.js';
 import { createEditor, getCursor, cmds, editUndo, editRedo, openFind, openReplace } from './editor.js';
 import { renderMarkdown, initPreview, buildSignatureHtml } from './preview.js';
-import { createFileTree } from './fileTree.js';
+import { createFileTree, isWithinDir } from './fileTree.js';
 import { createTabs } from './tabs.js';
 import { createToc } from './toc.js';
 import { createDirSearch } from './searchDir.js';
@@ -182,6 +182,12 @@ async function openFile(filePath, { line, col, reveal = true } = {}) {
       state.activeId = tab.id;
       api.addRecent(filePath, basename(filePath));
       startWatch(watchDirOf(filePath));
+    }
+    // 若打开的文件不在当前工作目录之内（例如通过“打开文件”对话框打开其他位置的文件，
+    // 或尚未选择工作目录），则把工作目录切换到该文件所在目录，使目录树直接显示其上级目录
+    // 与同级文件列表 —— 满足“打开文件后在目录树中显示该文件所在目录树”的需求。
+    if (filePath && (!state.workingDir || !isWithinDir(state.workingDir, filePath))) {
+      await setWorkingDir(dirname(filePath));
     }
     refreshTabs();
     fileTree.setActive(filePath);
