@@ -51,8 +51,14 @@ function applySettings(patch) {
   state.settings = { ...state.settings, ...patch };
   if (patch.theme !== undefined) applyTheme();
   if (patch.fontSize !== undefined || patch.fontFamily !== undefined || patch.codeFontFamily !== undefined) applyFonts();
-  if (patch.showFileTree !== undefined) $('#sidebar').style.display = patch.showFileTree ? '' : 'none';
-  if (patch.showToc !== undefined) $('#toc-panel').style.display = patch.showToc ? '' : 'none';
+  if (patch.showFileTree !== undefined) {
+    $('#sidebar').style.display = patch.showFileTree ? '' : 'none';
+    $('#sidebar-rail').style.display = patch.showFileTree ? 'none' : '';
+  }
+  if (patch.showToc !== undefined) {
+    $('#toc-panel').style.display = patch.showToc ? '' : 'none';
+    $('#toc-rail').style.display = patch.showToc ? 'none' : '';
+  }
   // 署名相关变更 → 立即重绘预览末尾的落款
   if (patch.signatureEnabled !== undefined || patch.signatureName !== undefined || patch.signatureEmail !== undefined) {
     if (getActiveTab()) renderNow();
@@ -553,6 +559,10 @@ function togglePanel(id) {
   const el = document.getElementById(id);
   const show = el.style.display === 'none';
   el.style.display = show ? '' : 'none';
+  // 面板收起时显示对应的边缘恢复栏，再次点击即可展开
+  const railId = id === 'sidebar' ? 'sidebar-rail' : 'toc-rail';
+  const rail = document.getElementById(railId);
+  if (rail) rail.style.display = show ? 'none' : '';
   if (id === 'sidebar') applySettings({ showFileTree: show });
   if (id === 'toc-panel') applySettings({ showToc: show });
 }
@@ -677,6 +687,9 @@ function setupToolbar() {
   };
   $('#btn-tree-collapse').onclick = () => togglePanel('sidebar');
   $('#btn-toc-collapse').onclick = () => togglePanel('toc-panel');
+  // 折叠后的边缘恢复栏：点击重新展开对应侧边栏
+  $('#sidebar-rail').onclick = () => togglePanel('sidebar');
+  $('#toc-rail').onclick = () => togglePanel('toc-panel');
   // 外部修改条按钮
   $('#external-change-bar .ext-reload').onclick = async () => {
     const id = $('#external-change-bar').dataset.id;
@@ -759,6 +772,8 @@ async function init() {
 
   $('#sidebar').style.display = state.settings.showFileTree ? '' : 'none';
   $('#toc-panel').style.display = state.settings.showToc ? '' : 'none';
+  $('#sidebar-rail').style.display = state.settings.showFileTree ? 'none' : '';
+  $('#toc-rail').style.display = state.settings.showToc ? 'none' : '';
 
   // 会话恢复（N5）
   const session = await api.getSession();
