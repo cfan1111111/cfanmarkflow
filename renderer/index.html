@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http: file:; font-src 'self' data:; connect-src 'self';" />
+  <link rel="stylesheet" href="css/app.css" />
+  <title>MarkFlow</title>
+</head>
+<body>
+  <div id="app">
+    <!-- 工具栏 -->
+    <header id="toolbar">
+      <div class="tb-group tb-left">
+        <button id="btn-open" class="tb-btn" data-i18n-title="tb.open" title="打开">📂</button>
+        <button id="btn-new" class="tb-btn" data-i18n-title="tb.new" title="新建">＋</button>
+        <button id="btn-save" class="tb-btn" data-i18n-title="tb.save" title="保存">💾</button>
+        <span class="tb-sep"></span>
+        <button id="btn-mode" class="tb-btn mode-switch" data-i18n-title="tb.modeSwitchHint" title="切换显示模式（F2）"><span data-i18n="tb.modeSplit">阅读和编辑</span></button>
+      </div>
+      <div class="tb-group tb-center" id="md-toolbar">
+        <button id="tb-bold" class="tb-btn" data-i18n-title="tb.bold" title="加粗"><b>B</b></button>
+        <button id="tb-italic" class="tb-btn" data-i18n-title="tb.italic" title="斜体"><i>I</i></button>
+        <button id="tb-strike" class="tb-btn" data-i18n-title="tb.strike" title="删除线"><s>S</s></button>
+        <button id="tb-code" class="tb-btn" data-i18n-title="tb.code" title="行内代码">&lt;&gt;</button>
+        <span class="tb-sep"></span>
+        <button id="tb-link" class="tb-btn" data-i18n-title="tb.link" title="链接">🔗</button>
+        <button id="tb-image" class="tb-btn" data-i18n-title="tb.image" title="图片">🖼</button>
+        <button id="tb-heading-up" class="tb-btn" data-i18n-title="tb.headingUp" title="标题升级">H+</button>
+        <button id="tb-heading-down" class="tb-btn" data-i18n-title="tb.headingDown" title="标题降级">H-</button>
+        <span class="tb-sep"></span>
+        <button id="tb-quote" class="tb-btn" data-i18n-title="tb.quote" title="引用">❝</button>
+        <button id="tb-ul" class="tb-btn" data-i18n-title="tb.ul" title="无序列表">•</button>
+        <button id="tb-ol" class="tb-btn" data-i18n-title="tb.ol" title="有序列表">1.</button>
+        <button id="tb-task" class="tb-btn" data-i18n-title="tb.task" title="任务列表">☑</button>
+        <button id="tb-table" class="tb-btn" data-i18n-title="tb.table" title="表格">▦</button>
+        <button id="tb-codeblock" class="tb-btn" data-i18n-title="tb.codeblock" title="代码块">{'}'}</button>
+        <button id="tb-hr" class="tb-btn" data-i18n-title="tb.hr" title="分割线">―</button>
+      </div>
+      <div class="tb-group tb-right">
+        <button id="btn-search-dir" class="tb-btn text" data-i18n="tb.searchDir">目录搜索</button>
+        <button id="btn-theme" class="tb-btn" data-i18n-title="tb.theme" title="主题">🌙</button>
+        <button id="btn-settings" class="tb-btn" data-i18n-title="tb.settings" title="设置">⚙</button>
+      </div>
+    </header>
+
+    <div id="body">
+      <!-- 左侧文件树 -->
+      <aside id="sidebar">
+        <div class="panel-header">
+          <span class="panel-title" data-i18n="tree.title">文件</span>
+          <div class="panel-actions">
+            <button id="btn-change-dir" class="mini-btn" data-i18n-title="tb.changeDir" title="选择目录">📁</button>
+            <button id="btn-sort" class="mini-btn" data-i18n-title="tb.sort" title="排序">⇅</button>
+            <button id="btn-tree-collapse" class="mini-btn" data-i18n-title="tb.treeCollapse" title="折叠">⟨</button>
+          </div>
+        </div>
+        <div id="dir-path" class="dir-path"></div>
+        <div id="file-tree" class="tree"></div>
+      </aside>
+
+      <!-- 中间编辑/预览区 -->
+      <main id="content">
+        <div id="welcome" hidden></div>
+        <div id="tabbar">
+          <div id="tabs"></div>
+          <button id="btn-newtab" class="tb-btn" data-i18n-title="tb.new" title="新建">＋</button>
+        </div>
+        <div id="panes" hidden>
+          <section id="editor-pane"><div id="editor-host"></div></section>
+          <div id="splitter"></div>
+          <section id="preview-pane"><article id="preview"></article></section>
+        </div>
+        <div id="external-change-bar" class="ext-bar" hidden>
+          <span class="ext-text"></span>
+          <button class="ext-reload btn primary" data-i18n="msg.reload">重新加载</button>
+          <button class="ext-ignore btn ghost" data-i18n="msg.ignore">忽略</button>
+        </div>
+      </main>
+
+      <!-- 右侧目录大纲 -->
+      <aside id="toc-panel">
+        <div class="panel-header">
+          <span class="panel-title" data-i18n="toc.title">目录</span>
+          <button id="btn-toc-collapse" class="mini-btn" data-i18n-title="tb.tocCollapse" title="折叠">⟩</button>
+        </div>
+        <div id="toc" class="toc"></div>
+      </aside>
+    </div>
+
+    <!-- 目录搜索面板 -->
+    <div id="dir-search-panel" hidden></div>
+
+    <!-- 状态栏 -->
+    <footer id="statusbar">
+      <span id="st-path"></span>
+      <span id="st-cursor"></span>
+      <span id="st-words"></span>
+      <span class="st-spacer"></span>
+      <span id="st-mode"></span>
+      <span id="st-encoding"></span>
+      <span id="st-saved"></span>
+    </footer>
+  </div>
+
+  <div id="drop-overlay" class="drop-overlay" hidden data-i18n="drop.hint">拖放到此处打开 Markdown 文件</div>
+  <div id="modal-mask" class="modal-mask" hidden><div id="modal"></div></div>
+  <div id="about-mask" class="modal-mask" hidden><div id="about-modal"></div></div>
+  <div id="toast" class="toast"></div>
+  <script src="bundle.js"></script>
+</body>
+</html>
