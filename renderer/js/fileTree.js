@@ -68,8 +68,10 @@ export function createFileTree(container, { onOpen, onContext, onDirChanged }) {
         row.innerHTML = `<span class="twisty">▸</span><span class="ico">📁</span><span class="name">${escapeHtml(n.name)}</span>`;
         const childWrap = document.createElement('div');
         childWrap.className = 'tree-children';
-        childWrap.style.display = 'none';
         const isOpen = expanded.has(pkey);
+        // 关键：刷新时必须把「已展开目录」的子容器保持可见，否则 renderNodes 重建后
+        // 子项仍为 display:none —— 外部修改触发的 refresh() 会让目录树“视觉收起”。
+        childWrap.style.display = isOpen ? '' : 'none';
         const twisty = row.querySelector('.twisty');
         twisty.textContent = isOpen ? '▾' : '▸';
         twisty.classList.toggle('expanded', isOpen);
